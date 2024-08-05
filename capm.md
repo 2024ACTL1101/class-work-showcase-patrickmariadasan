@@ -81,7 +81,18 @@ $$
 $$
 
 ```r
-#fill the code
+#Initialize 'Daily Return' Column
+amd_df$daily_return <- NA
+gspc_df$daily_return <- NA
+
+#Calculate Daily Return for AMD & S&P500
+for (i in 2:nrow(amd_df)) {
+  amd_df$daily_return[i] <- ((amd_df$AMD[i]-amd_df$AMD[i-1])/amd_df$AMD[i-1])
+}
+
+for (i in 2:nrow(gspc_df)) {
+  gspc_df$daily_return[i] <- ((gspc_df$GSPC[i]-gspc_df$GSPC[i-1])/gspc_df$GSPC[i-1])
+}
 ```
 
 - **Calculate Risk-Free Rate**: Calculate the daily risk-free rate by conversion of annual risk-free Rate. This conversion accounts for the compounding effect over the days of the year and is calculated using the formula:
@@ -91,21 +102,36 @@ $$
 $$
 
 ```r
-#fill the code
+#Calculate the Daily Risk-Free rate
+df <- df %>%
+  mutate(
+    daily_rate=((1+RF/100)^(1/360)-1)
+  )
 ```
 
 
 - **Calculate Excess Returns**: Compute the excess returns for AMD and the S&P 500 by subtracting the daily risk-free rate from their respective returns.
 
 ```r
-#fill the code
+#Excess returns for AMD & S&P500
+df <- df %>%
+  mutate(
+    excess_return_amd=amd_df$daily_return-daily_rate,
+    excess_return_gspc=gspc_df$daily_return-daily_rate
+  )
 ```
 
 
 - **Perform Regression Analysis**: Using linear regression, we estimate the beta (\(\beta\)) of AMD relative to the S&P 500. Here, the dependent variable is the excess return of AMD, and the independent variable is the excess return of the S&P 500. Beta measures the sensitivity of the stock's returns to fluctuations in the market.
 
 ```r
-#fill the code
+#Run Linear Regression Model
+model <- lm(excess_return_amd ~ excess_return_gspc, data = df)
+summary(model)
+
+#Estimate Beta Value
+beta_amd <- coef(model)[2]
+cat("Beta=", beta_amd)
 ```
 
 
@@ -114,13 +140,20 @@ $$
 What is your \(\beta\)? Is AMD more volatile or less volatile than the market?
 
 **Answer:**
-
+\(\beta\) = 1.57 (2d.p.). This means that AMD stock is more volatile than the market, where if the  if the S&P 500 goes up/down by 1%, AMD's stock is expected to increase/decrease by approximately 1.57%.
 
 #### Plotting the CAPM Line
 Plot the scatter plot of AMD vs. S&P 500 excess returns and add the CAPM regression line.
 
 ```r
-#fill the code
+#Remove rows with N/A values
+clean_df <- na.omit(df)
+
+#Plot the scatter plot of AMD vs. S&P 500 excess returns and add the CAPM regression line
+ggplot(clean_df, aes(x=excess_return_gspc, y=excess_return_amd)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE, color="blue") +
+  labs(title = "AMD vs. S&P 500 Excess Returns (with CAPM regression line)", x="S&P 500 Excess Return", y="AMD Excess Return")
 ```
 
 ### Step 3: Predictions Interval
@@ -131,5 +164,31 @@ Suppose the current risk-free rate is 5.0%, and the annual expected return for t
 **Answer:**
 
 ```r
-#fill the code
+# Extract the residual standard error of the regression model
+residual_standard_error <- summary(model)$sigma
+
+#Annual standard error
+annual_standard_error <- residual_standard_error * sqrt(252)
+
+# 5% current risk-free rate
+current_rf_rate <- 5.0 / 100
+# 13.3% expected return for S&P 50
+expected_return_market <- 13.3 / 100  
+
+# Expected return for AMD using CAPM
+beta_amd <- coef(model)["excess_return_gspc"]
+expected_return_amd <- current_rf_rate + beta_amd * (expected_return_market - current_rf_rate)
+
+# Prediction interval
+confidence_level <- 0.90
+alpha_amd <- 1 - confidence_level
+t_value <- qt(1 - alpha_amd / 2, df = nrow(df) - 2)
+
+# Lower and upper bounds of the prediction interval
+lower_bound <- expected_return_amd - t_value * annual_standard_error
+upper_bound <- expected_return_amd + t_value * annual_standard_error
+
+# Print the results
+cat("Expected Annual Return for AMD: ", expected_return_amd * 100, "%\n")
+cat("90% Prediction Interval: [", lower_bound * 100, "%, ", upper_bound * 100, "%]\n")
 ```
